@@ -213,95 +213,286 @@ Consultas del análisis de campañas:
 
 ---
 
-## 💡 Principales hallazgos
+# 💡 Principales insights
 
-- Una clave de negocio duplicada puede generar relaciones muchos-a-muchos y distorsionar los KPIs aun cuando afecte a una proporción relativamente pequeña de registros.
-- La validación de calidad debe realizarse antes del análisis de rentabilidad.
-- Un mayor volumen de viajes no implica necesariamente una mayor rentabilidad promedio.
-- `Auto` lidera en margen total debido a su escala, mientras que `Go Sedan` presenta el mayor margen promedio por viaje.
-- Las campañas con mayor volumen o ingresos no necesariamente son las más eficientes.
-- El ROMI permite evaluar el rendimiento de las campañas considerando también la inversión realizada en marketing.
-- `DESCUENTO_UNIVERSITARIO_55` presentó el mayor ROMI debido a una alta contribución en relación con su costo de campaña.
+## 1. La calidad de la clave de unión afecta directamente los KPIs financieros
+
+Los `booking_id` inconsistentes generaban relaciones muchos-a-muchos entre viajes y costos.
+
+Como consecuencia, el JOIN sin tratamiento sobreestimaba:
+
+- **3,4% de los ingresos**
+- **3,4% de los costos**
+- **5,1% del margen operativo**
+
+Esto demuestra que incluso una proporción relativamente pequeña de identificadores inconsistentes puede alterar de forma material los resultados financieros.
 
 ---
 
-## ⚠️ Limitaciones
+## 2. Volumen y rentabilidad unitaria muestran perspectivas diferentes
 
-Las tablas originales se encuentran disponibles únicamente dentro del entorno SQL del bootcamp y la plataforma no permite exportar los conjuntos de datos completos.
+**Auto** presentó el mayor margen operativo total con **3.060.684**, impulsado principalmente por su mayor volumen de viajes.
 
-Por este motivo, los archivos fuente con los **150.000 registros** no se incluyen en este repositorio.
+Sin embargo, **Go Sedan** alcanzó el mayor margen promedio por viaje con **123,45**, a pesar de ocupar el tercer lugar en margen total.
+
+Esto evidencia que:
+
+> **mayor volumen no implica necesariamente mayor rentabilidad por operación.**
+
+---
+
+## 3. Los viajes `Incomplete` también generan actividad económica
+
+Los viajes `Incomplete` registraron:
+
+- **8.849 viajes**
+- ingresos por **4.502.183**
+- margen operativo de **1.087.666**
+- margen promedio de **122,91**
+
+Su margen promedio fue prácticamente equivalente al de los viajes `Completed` (**122,73**).
+
+Esto sugiere que los viajes `Incomplete` corresponden a operaciones iniciadas pero interrumpidas, y no deben analizarse como simples cancelaciones.
+
+---
+
+## 4. El margen operativo mensual presenta relativa estabilidad
+
+Marzo registró el mayor margen operativo del año con **1.087.588** y también la mayor expansión mensual, creciendo **12,54%** respecto a febrero.
+
+Febrero presentó la mayor caída mensual con **-7,93%**.
+
+A partir de mayo, las variaciones fueron generalmente moderadas, lo que no permite identificar una estacionalidad pronunciada con un solo año de información.
+
+---
+
+## 5. Mayor volumen de campaña no garantiza mayor retorno
+
+El análisis de ROMI mostró diferencias importantes entre campañas.
+
+`DESCUENTO_UNIVERSITARIO_55` presentó el mayor ROMI con **828,75%**, mientras que `LANZAMIENTO_CDMX_2024_T3` alcanzó **-69,70%**.
+
+Esto demuestra que:
+
+> **una campaña con volumen o ingresos relevantes puede destruir valor si su inversión supera la contribución generada.**
+
+---
+
+# 🚀 Recomendaciones
+
+## 1. Implementar controles preventivos sobre identificadores críticos
+
+Incorporar validaciones automáticas de unicidad y consistencia sobre `booking_id` antes de ejecutar procesos de integración entre viajes y costos.
+
+Esto permitiría detectar relaciones muchos-a-muchos antes de que afecten reportes financieros o indicadores de rentabilidad.
+
+---
+
+## 2. Fortalecer el modelo de datos con una llave transaccional confiable
+
+La principal limitación del análisis fue no contar con una llave secundaria que permitiera identificar de manera inequívoca cada viaje y su costo asociado.
+
+Se recomienda evaluar la creación de un identificador transaccional único que incorpore o relacione atributos como:
+
+- `booking_id`
+- fecha
+- cliente
+- viaje
+- registro de costos
+
+Esto permitiría recuperar registros actualmente excluidos y mejorar la trazabilidad entre fuentes.
+
+---
+
+## 3. Evaluar desempeño de vehículos con métricas de volumen y rentabilidad
+
+Evitar decisiones basadas exclusivamente en margen total.
+
+Auto lidera por contribución total, mientras que Go Sedan presenta mayor margen promedio por viaje.
+
+Se recomienda utilizar conjuntamente:
+
+- cantidad de viajes,
+- ingresos,
+- margen total,
+- margen promedio por viaje.
+
+Esto permitiría diferenciar categorías que generan valor por escala de aquellas que presentan mayor eficiencia unitaria.
+
+---
+
+## 4. Investigar las causas de los viajes `Incomplete`
+
+Dado que los viajes `Incomplete` generan ingresos y presentan un margen promedio similar a los viajes completados, conviene profundizar en sus causas.
+
+Se recomienda analizar variables como:
+
+- motivo de interrupción,
+- tipo de vehículo,
+- horario,
+- ubicación,
+- distancia recorrida.
+
+El objetivo sería identificar patrones que permitan reducir interrupciones o recuperar operaciones potencialmente completables.
+
+---
+
+## 5. Revisar campañas con ROMI negativo antes de mantener su inversión
+
+Campañas como:
+
+- `LANZAMIENTO_CDMX_2024_T3`
+- `AHORROS_PESOS_MX_191`
+- `IMPULSO_ECONOMIA_2024_18`
+- `PRIMER_VIAJE_GRATIS_2024`
+
+presentan retorno negativo.
+
+Antes de mantener o aumentar su presupuesto se recomienda revisar:
+
+- segmentación,
+- costo de adquisición,
+- incentivo promocional,
+- contribución generada,
+- objetivo estratégico de la campaña.
+
+Una campaña con ROMI negativo no necesariamente debe eliminarse inmediatamente, pero sí requiere justificar si existe un objetivo adicional —como adquisición o penetración— que compense su bajo retorno financiero.
+
+---
+
+## 6. Evaluar escalamiento controlado de campañas con alto ROMI
+
+`DESCUENTO_UNIVERSITARIO_55` presentó un ROMI de **828,75%**.
+
+En lugar de aumentar inmediatamente el presupuesto, se recomienda realizar un escalamiento progresivo y monitorear si el retorno se mantiene a medida que aumenta la inversión.
+
+Esto permitiría evitar asumir que un ROMI elevado permanecerá constante a mayor escala.
+
+---
+
+## 7. Mantener seguimiento temporal antes de concluir estacionalidad
+
+Aunque marzo presentó el mayor margen y la mayor variación positiva mensual, un solo año de información no es suficiente para confirmar un patrón estacional.
+
+Se recomienda incorporar años adicionales y comparar:
+
+- variación mensual,
+- comportamiento interanual,
+- crecimiento YoY,
+- estacionalidad por tipo de vehículo o campaña.
+
+Esto permitiría diferenciar fluctuaciones puntuales de patrones recurrentes.
+
+# ⚠️ Limitaciones
+
+Los datos originales se encuentran disponibles únicamente dentro del entorno SQL del bootcamp y la plataforma no permite exportar los conjuntos completos.
+
+Por este motivo, los archivos fuente con los **150.000 registros** no se incluyen en el repositorio.
+
+El proyecto debe considerarse un:
+
+> **caso analítico documentado y no un pipeline completamente reproducible fuera del entorno original.**
 
 El repositorio contiene:
 
-- consultas SQL utilizadas durante el análisis,
+- consultas SQL,
 - evidencias de ejecución,
-- documentación de calidad de datos,
+- documentación de calidad,
 - resultados agregados,
 - tablas de KPIs,
 - documentación complementaria.
 
-Debido a que los datos originales no pueden redistribuirse, este repositorio debe considerarse un **caso analítico documentado**, y no un proyecto completamente reproducible fuera del entorno original.
+### Impacto de excluir registros inconsistentes
+
+La exclusión de los `booking_id` inconsistentes reduce ligeramente la representatividad de la base analítica final.
+
+Sin embargo, debido a que no existe una llave secundaria que permita determinar de forma confiable qué costo corresponde a cada viaje, mantener esos registros habría implicado introducir relaciones potencialmente incorrectas.
+
+Por esta razón se priorizó:
+
+> **confiabilidad de los KPIs sobre conservación artificial de registros cuya relación no podía validarse.**
 
 ---
 
-## 🛠️ Herramientas y habilidades aplicadas
+# 🛠️ 7. Herramientas y habilidades aplicadas
 
-- **SQL**
+### SQL
+
 - CTEs
-- JOINs
+- `JOIN`
+- Subconsultas
 - Agregaciones
-- Lógica condicional
+- `GROUP BY`
+- `HAVING`
+- Manejo de valores nulos
+- Funciones de fecha
+- `DATE_TRUNC`
+
+### Window Functions
+
+- `RANK()`
+- `LAG()`
+
+### Data Analytics
+
 - Auditoría de calidad de datos
+- Validación de claves
 - Limpieza y preparación de datos
 - Desarrollo de KPIs
 - Análisis de rentabilidad
+- Análisis temporal
 - Análisis de campañas
 - ROMI
+- Interpretación de resultados
+- Recomendaciones de negocio
+
+### Herramientas
+
+- SQL
 - Google Sheets
-- GitHub
 
 ---
 
-## 📂 Estructura del repositorio
+# 📂 8. Estructura del repositorio
 
-```text
-uber-2024-sql-data-quality-profitability/
-│
-├── README.md
-│
-├── sql/
-│   ├── 01_data_quality_audit.sql
-│   ├── 02_clean_analytical_base.sql
-│   ├── 03_operational_analysis.sql
-│   └── 04_campaign_analysis.sql
-│
-└── images/
-    ├── 01_booking_id_inconsistente.png
-    ├── 02_join_sin_limpieza.png
-    ├── 03_base_limpia.png
-    └── 04_campaign_romi.png
-```
+    uber-2024-sql-data-quality-profitability/
+    │
+    ├── README.md
+    │
+    ├── sql/
+    │   ├── 01_data_quality_audit.sql
+    │   ├── 02_clean_analytical_base.sql
+    │   ├── 03_operational_analysis.sql
+    │   └── 04_campaign_analysis.sql
+    │
+    └── images/
+        └── evidencias/
 
 ---
 
-## 📎 Documentación complementaria
+# 📎 9. Documentación complementaria
 
 El proyecto cuenta con un Google Sheets que contiene:
 
-- Diccionario de datos
-- Auditoría de calidad
-- Impacto de la limpieza
-- KPIs operativos
-- Resultados de campañas
+- diccionario de datos,
+- auditoría de calidad,
+- impacto de la limpieza,
+- KPIs operativos,
+- análisis por tipo de vehículo,
+- evolución mensual,
+- resultados de campañas,
+- ROMI.
 
-👉 [Ver documentación y resultados en Google Sheets](https://docs.google.com/spreadsheets/d/1cV1tPN_8tjod6jmD0BccT3mNjbbvwWur6o29MVPij-0/edit?usp=sharing)
+👉 [Ver documentación y resultados en Google Sheets](TU_LINK_DE_GOOGLE_SHEETS)
+
+Las consultas completas pueden revisarse directamente en la carpeta [`sql/`](sql/).
 
 ---
 
-## 👩‍💻 Autora
+# 👩‍💻 Autora
 
 **Dayana Rodríguez**
 
 Data Analyst | SQL · Python · Power BI · Tableau · Excel
 
-Este proyecto forma parte de mi portafolio de Data Analytics y busca demostrar cómo las decisiones relacionadas con la calidad de los datos pueden afectar directamente la confiabilidad de los indicadores y las conclusiones de negocio.
+Este proyecto forma parte de mi portafolio de Data Analytics y busca demostrar cómo la **calidad de los datos, el diseño correcto de las relaciones y la interpretación de KPIs** pueden afectar directamente la confiabilidad de las conclusiones y las decisiones de negocio.
