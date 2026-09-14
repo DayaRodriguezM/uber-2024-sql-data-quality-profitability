@@ -1,389 +1,348 @@
-# Uber 2024 | Calidad de Datos SQL y Rentabilidad
+# Uber 2024 | SQL Data Quality & Profitability
 
-Proyecto SQL enfocado en **calidad de datos, rentabilidad operativa y desempeño de campañas de marketing** utilizando datos de viajes de Uber correspondientes a 2024.
+Proyecto de análisis de datos enfocado en **calidad de datos, rentabilidad operativa y desempeño de campañas de marketing**, utilizando información de viajes de Uber correspondiente a 2024.
 
-El análisis comenzó con una auditoría de calidad de datos que permitió identificar inconsistencias en la principal clave de unión (`booking_id`). Luego de evaluar su impacto, se construyó una base analítica depurada para calcular KPIs operativos y de marketing de manera confiable.
+El análisis comenzó con una auditoría de calidad que permitió identificar inconsistencias en la principal clave de unión (`booking_id`). Antes de calcular indicadores financieros o comerciales, se evaluó el impacto de estas inconsistencias y se construyó una base analítica depurada para trabajar con KPIs confiables.
+
+> **Hallazgo principal:** una relación muchos-a-muchos provocada por `booking_id` inconsistentes sobreestimaba el margen operativo en aproximadamente **5,1%**.
 
 ---
 
 ## 🎯 Objetivo del proyecto
 
-Los principales objetivos fueron:
+El proyecto busca responder cuatro preguntas principales:
 
-- Evaluar la calidad e integridad de tres conjuntos de datos relacionados.
-- Identificar problemas que pudieran afectar las uniones y el cálculo de KPIs.
-- Construir una base analítica depurada para el cálculo confiable de indicadores.
-- Analizar volumen de viajes, ingresos, costos operativos y márgenes.
-- Evaluar el desempeño de las campañas de marketing mediante contribución y ROMI.
+1. ¿La calidad de los datos permite construir una base analítica confiable?
+2. ¿Qué estados y tipos de vehículo generan mayor contribución económica?
+3. ¿Cómo evoluciona la rentabilidad operativa durante el año?
+4. ¿Qué campañas de marketing generan mayor retorno considerando costos operativos e inversión?
+
+El análisis se desarrolló en cuatro etapas:
+
+- Auditoría de calidad de datos.
+- Construcción de una base analítica depurada.
+- Análisis operativo y temporal.
+- Evaluación de campañas mediante contribución y ROMI.
 
 ---
 
-## 🗂️ Fuentes de datos
+## 📁 Fuentes de datos
 
-El análisis se realizó utilizando tres tablas disponibles en el entorno SQL del bootcamp:
+El análisis utiliza tres tablas disponibles en el entorno SQL del bootcamp:
 
 | Tabla | Descripción | Registros |
 |---|---|---:|
 | `uber_viajes_bookings` | Información del viaje, cliente, estado, vehículo, campaña, ingresos y distancia | 150.000 |
-| `uber_costo_viajes` | Componentes de pago y costos operativos asociados a cada `booking_id` | 150.000 |
+| `uber_costo_viajes` | Componentes de costos operativos asociados a cada `booking_id` | 150.000 |
 | `uber_campanas_mercadeo` | Descripción y costo de las campañas de marketing | 50 |
 
-El período analizado corresponde al año **2024**.
+**Período analizado:** 2024.
 
 ---
 
-## 🔍 Auditoría de calidad de datos
+# 🔎 1. Auditoría de calidad de datos
 
-La primera etapa consistió en validar identificadores, valores nulos, reglas de negocio y consistencia entre las tablas.
+Antes de calcular KPIs se validaron:
 
-### Hallazgo principal: inconsistencia en `booking_id`
+- unicidad de identificadores,
+- valores nulos,
+- consistencia de costos,
+- estados de viaje,
+- correspondencia entre tablas,
+- validez de las claves utilizadas en los `JOIN`.
 
-Aunque `booking_id` debía identificar cada reserva individual, la auditoría encontró:
+## Hallazgo principal: inconsistencia en `booking_id`
 
-- **150.000** filas en la tabla de viajes.
-- **148.767** `booking_id` distintos.
-- **1.224** identificadores repetidos.
-- **2.457** filas asociadas a identificadores repetidos.
-- **1.233** ocurrencias adicionales.
-- **1.215** identificadores aparecieron dos veces.
-- **9** identificadores aparecieron tres veces.
+La auditoría encontró:
 
-La inspección mostró que estos casos no correspondían a duplicados exactos.
+| Indicador | Resultado |
+|---|---:|
+| Registros en tabla de viajes | 150.000 |
+| `booking_id` distintos | 148.767 |
+| Identificadores repetidos | 1.224 |
+| Registros involucrados | 2.457 |
+| Ocurrencias adicionales | 1.233 |
+| Máximo de apariciones por ID | 3 |
+
+La inspección mostró que estos registros **no correspondían a duplicados exactos**.
 
 Un mismo `booking_id` podía estar asociado a diferentes:
 
-- fechas y horas,
 - clientes,
+- fechas y horas,
 - campañas,
 - tipos de vehículo,
-- ubicaciones de origen y destino,
-- estados del viaje.
+- estados del viaje,
+- ubicaciones de origen y destino.
 
-Esto impedía establecer una relación uno a uno confiable entre viajes y costos.
-
-![Booking ID inconsistente](images/01_booking_id_inconsistente.png)
+Por lo tanto, `booking_id` no podía utilizarse como una llave uno-a-uno confiable para relacionar viajes y costos en esos casos.
 
 ### Hallazgos adicionales de calidad
 
-- `valor_booking` y `distancia_booking` presentaban **48.000 valores nulos**, asociados principalmente a viajes cancelados o no ejecutados.
-- Los viajes con estado `Incomplete` presentaban ingresos y distancia, lo que indica viajes iniciados o interrumpidos, y no simples cancelaciones.
-- Los componentes de costos operativos presentaban el mismo patrón de **48.000 valores nulos**.
+- `valor_booking` y `distancia_booking` presentaban **48.000 valores nulos**.
+- Los valores nulos estaban asociados principalmente a viajes cancelados o no ejecutados.
+- Los viajes con estado `Incomplete` sí presentaban ingresos y distancia.
+- Los componentes de costos operativos mostraban el mismo patrón de **48.000 valores nulos**.
 - `costo_total = 0` en esas 48.000 filas, consistente con registros sin actividad operativa.
 - No se encontraron inconsistencias entre `costo_total` y la suma de sus componentes.
-- La tabla de campañas contenía **50 campañas únicas**, sin identificadores nulos ni costos de campaña inválidos.
+- Las 50 campañas presentaban identificadores únicos, sin valores nulos y con costos válidos.
 
-Consulta completa de auditoría:
+📄 [Ver auditoría completa en SQL](sql/01_data_quality_audit.sql)
 
-[`01_data_quality_audit.sql`](sql/01_data_quality_audit.sql)
-
----
-
-## 🧹 Estrategia de limpieza de datos
-
-Una unión directa entre `uber_viajes_bookings` y `uber_costo_viajes` mediante `booking_id` generaba una relación **muchos-a-muchos** para los identificadores repetidos.
-
-### JOIN sin tratamiento
-
-La unión directa produjo:
-
-- **152.484 filas**
-- Ingresos: **52.712.901**
-- Costos operativos: **39.977.868**
-- Margen operativo: **12.948.588**
-
-![JOIN sin limpieza](images/02_join_sin_limpieza.png)
-
-El problema no podía resolverse seleccionando arbitrariamente uno de los registros repetidos, ya que la tabla de costos no contenía una fecha, cliente u otro identificador que permitiera determinar con certeza qué costo correspondía a cada viaje.
-
-Por esta razón, se tomó la siguiente decisión metodológica:
-
-> **Excluir de la base analítica integrada todos los registros asociados a `booking_id` inconsistentes, manteniendo intactas las tablas originales.**
-
-### Base analítica depurada
-
-Luego del tratamiento:
-
-- **147.543 registros confiables**
-- Ingresos: **50.991.953**
-- Costos operativos: **38.672.667**
-- Margen operativo: **12.319.286**
-
-![Base analítica depurada](images/03_base_limpia.png)
-
-Al comparar ambos escenarios, el JOIN sin tratamiento sobreestimaba aproximadamente:
-
-- **3,4% de los ingresos**
-- **3,4% de los costos operativos**
-- **5,1% del margen operativo**
-
-Esto demuestra cómo una inconsistencia relativamente pequeña en una clave de unión puede alterar de manera material los KPIs financieros.
-
-Lógica de limpieza:
-
-[`02_clean_analytical_base.sql`](sql/02_clean_analytical_base.sql)
+📎 [Ver documentación y resultados en Google Sheets](TU_LINK_DE_GOOGLE_SHEETS)
 
 ---
 
-## 📊 Preguntas de negocio
+# 🧹 2. Estrategia de limpieza e impacto en los KPIs
 
-A partir de la base analítica depurada se plantearon cuatro preguntas principales:
+Una unión directa entre `uber_viajes_bookings` y `uber_costo_viajes` mediante `booking_id` generaba una relación **muchos-a-muchos** para los identificadores inconsistentes.
 
-1. ¿Cómo se distribuyen los viajes según estado, tipo de vehículo y período?
-2. ¿Qué tipos de viaje generan mayores ingresos y margen operativo?
-3. ¿Qué campañas concentran mayor volumen de viajes e ingresos?
-4. ¿Qué campañas generan el mejor retorno considerando costos operativos y costo de marketing?
+El problema no podía resolverse seleccionando arbitrariamente el primer o último registro, ya que la tabla de costos no incluía una llave secundaria —como fecha, cliente u otro identificador— que permitiera determinar con certeza qué costo correspondía a cada viaje.
 
----
+Por esta razón se tomó la siguiente decisión metodológica:
 
-## 📈 Análisis operativo
+> **Excluir de la base analítica integrada los registros asociados a `booking_id` inconsistentes, manteniendo intactas las tablas originales.**
 
-### Estado de los viajes
+## Impacto de la limpieza
 
-Los viajes `Completed` concentraron la mayor generación de ingresos y margen operativo debido a su volumen.
+| Indicador | JOIN sin tratamiento | Base analítica depurada | Impacto | Sobreestimación |
+|---|---:|---:|---:|---:|
+| Registros resultantes | 152.484 | 147.543 | +4.941 | 3,35% |
+| Ingresos totales | 52.712.901 | 50.991.953 | +1.720.948 | 3,37% |
+| Costos operativos | 39.977.868 | 38.672.667 | +1.305.201 | 3,37% |
+| Margen operativo | 12.948.588 | 12.319.286 | +629.302 | **5,11%** |
 
-Los viajes `Incomplete` también generaron ingresos y costos operativos, reforzando la hipótesis de que corresponden a viajes iniciados pero interrumpidos, en lugar de cancelaciones tradicionales.
+### Insight
 
-### Desempeño por tipo de vehículo
+Aunque la inconsistencia afectaba una proporción relativamente pequeña de identificadores, su impacto sobre los indicadores financieros era material.
 
-**Auto** presentó el mayor ingreso y margen total debido a su volumen de viajes.
-
-Sin embargo, **Go Sedan** obtuvo el mayor margen promedio por viaje, mostrando que el desempeño total y el desempeño unitario deben analizarse por separado.
-
-### Evolución mensual
-
-El comportamiento mensual durante 2024 fue relativamente estable y no mostró una estacionalidad marcada.
-
-**Marzo** registró el mayor margen operativo total del año.
-
-Consultas del análisis operativo:
-
-[`03_operational_analysis.sql`](sql/03_operational_analysis.sql)
-
----
-
-## 📣 Análisis de campañas de marketing
-
-Para evitar duplicar el costo de una campaña por cada viaje asociado, primero se agregaron los resultados de viajes por `campana_id` y posteriormente se realizó la unión con la tabla de campañas.
-
-### Métricas utilizadas
-
-**Margen operativo**
-
-```text
-Ingresos - Costos operativos
-```
-
-**Contribución de campaña**
-
-```text
-Margen operativo - Costo de campaña
-```
-
-**ROMI**
-
-```text
-Contribución de campaña / Costo de campaña × 100
-```
-
-### Campañas con mayor ROMI
-
-| Campaña | ROMI |
-|---|---:|
-| `DESCUENTO_UNIVERSITARIO_55` | 828,75% |
-| `PROMO_ESCUDO_CLIMA_67` | 688,15% |
-| `ESPECIAL_CARNAVAL_021` | 650,99% |
-| `PAQUETE_BIENVENIDA_105` | 625,89% |
-| `CELEBRACION_CUMPLEAÑOS_126` | 576,24% |
-
-### Campañas con menor ROMI
-
-| Campaña | ROMI |
-|---|---:|
-| `LANZAMIENTO_CDMX_2024_T3` | -69,70% |
-| `AHORROS_PESOS_MX_191` | -53,75% |
-| `IMPULSO_ECONOMIA_2024_18` | -40,47% |
-| `PRIMER_VIAJE_GRATIS_2024` | -36,49% |
-| `MAGIA_NAVIDAD_2024` | -24,99% |
-
-![ROMI de campañas](images/04_campaign_romi.png)
-
-Consultas del análisis de campañas:
-
-[`04_campaign_analysis.sql`](sql/04_campaign_analysis.sql)
-
----
-
-# 💡 Principales insights
-
-## 1. La calidad de la clave de unión afecta directamente los KPIs financieros
-
-Los `booking_id` inconsistentes generaban relaciones muchos-a-muchos entre viajes y costos.
-
-Como consecuencia, el JOIN sin tratamiento sobreestimaba:
+El JOIN sin tratamiento sobreestimaba aproximadamente:
 
 - **3,4% de los ingresos**
 - **3,4% de los costos**
 - **5,1% del margen operativo**
 
-Esto demuestra que incluso una proporción relativamente pequeña de identificadores inconsistentes puede alterar de forma material los resultados financieros.
+> Una falla en una clave de unión puede alterar significativamente la interpretación financiera del negocio incluso cuando afecta una fracción pequeña de los registros.
+
+📄 [Ver lógica de limpieza y construcción de la base analítica](sql/02_clean_analytical_base.sql)
+
+📎 [Ver comparación completa en Google Sheets](TU_LINK_DE_GOOGLE_SHEETS)
 
 ---
 
-## 2. Volumen y rentabilidad unitaria muestran perspectivas diferentes
+# 📊 3. Análisis operativo
 
-**Auto** presentó el mayor margen operativo total con **3.060.684**, impulsado principalmente por su mayor volumen de viajes.
+Una vez construida la base analítica depurada, se analizaron estados de viaje, tipos de vehículo y comportamiento temporal.
 
-Sin embargo, **Go Sedan** alcanzó el mayor margen promedio por viaje con **123,45**, a pesar de ocupar el tercer lugar en margen total.
+## Estado de los viajes
 
-Esto evidencia que:
+Los estados `Completed` e `Incomplete` fueron los únicos que presentaron actividad económica relevante.
 
-> **mayor volumen no implica necesariamente mayor rentabilidad por operación.**
+| Estado | Viajes | Ingresos | Costos operativos | Margen total | Margen promedio |
+|---|---:|---:|---:|---:|---:|
+| `Completed` | 91.510 | 46.489.770 | 35.258.141 | 11.231.629 | 122,73 |
+| `Incomplete` | 8.849 | 4.502.183 | 3.414.526 | 1.087.666 | 122,91 |
 
----
+Los estados `Cancelled by Customer`, `Cancelled by Driver` y `No Driver Found` no presentaron ingresos ni costos operativos asociados.
 
-## 3. Los viajes `Incomplete` también generan actividad económica
+### Insight
 
-Los viajes `Incomplete` registraron:
+Los viajes `Incomplete` no deben interpretarse como simples cancelaciones.
 
-- **8.849 viajes**
-- ingresos por **4.502.183**
-- margen operativo de **1.087.666**
-- margen promedio de **122,91**
-
-Su margen promedio fue prácticamente equivalente al de los viajes `Completed` (**122,73**).
-
-Esto sugiere que los viajes `Incomplete` corresponden a operaciones iniciadas pero interrumpidas, y no deben analizarse como simples cancelaciones.
+Aunque representan un volumen mucho menor, presentan ingresos, costos y un margen promedio prácticamente equivalente al de los viajes `Completed`, lo que sugiere viajes iniciados pero interrumpidos.
 
 ---
 
-## 4. El margen operativo mensual presenta relativa estabilidad
+## Desempeño por tipo de vehículo
 
-Marzo registró el mayor margen operativo del año con **1.087.588** y también la mayor expansión mensual, creciendo **12,54%** respecto a febrero.
+Para evaluar el desempeño se analizaron dos perspectivas:
 
-Febrero presentó la mayor caída mensual con **-7,93%**.
+- **contribución total al margen**, influenciada por el volumen;
+- **margen promedio por viaje**, como aproximación a la rentabilidad unitaria.
 
-A partir de mayo, las variaciones fueron generalmente moderadas, lo que no permite identificar una estacionalidad pronunciada con un solo año de información.
+| Tipo de vehículo | Viajes | Margen total | Margen promedio | Rank margen total | Rank margen promedio |
+|---|---:|---:|---:|---:|---:|
+| Auto | 36.810 | 3.060.684 | 122,47 | **1** | 5 |
+| Go Mini | 29.284 | 2.455.035 | 122,65 | 2 | 4 |
+| Go Sedan | 26.723 | 2.229.027 | **123,45** | 3 | **1** |
+| Bike | 22.143 | 1.860.093 | 123,02 | 4 | 3 |
+| Premier Sedan | 17.824 | 1.492.276 | 123,09 | 5 | 2 |
+| eBike | 10.376 | 859.453 | 121,80 | 6 | 6 |
+| Uber XL | 4.383 | 362.718 | 121,02 | 7 | 7 |
 
----
+### Window Function: `RANK()`
 
-## 5. Mayor volumen de campaña no garantiza mayor retorno
+Para comparar ambas dimensiones se utilizaron funciones de ventana:
 
-El análisis de ROMI mostró diferencias importantes entre campañas.
+    RANK() OVER (ORDER BY margen_total DESC)
 
-`DESCUENTO_UNIVERSITARIO_55` presentó el mayor ROMI con **828,75%**, mientras que `LANZAMIENTO_CDMX_2024_T3` alcanzó **-69,70%**.
+    RANK() OVER (ORDER BY margen_promedio DESC)
 
-Esto demuestra que:
+### Insight
 
-> **una campaña con volumen o ingresos relevantes puede destruir valor si su inversión supera la contribución generada.**
+**Auto** ocupa el primer lugar en margen total debido principalmente a su escala, pero solo el quinto en margen promedio.
 
----
+**Go Sedan**, en cambio, ocupa el tercer lugar en contribución total y el **primer lugar en margen promedio por viaje**.
 
-# 🚀 Recomendaciones
+**Premier Sedan** también muestra esta diferencia: quinto en margen total y segundo en margen promedio.
 
-## 1. Implementar controles preventivos sobre identificadores críticos
+> **Mayor volumen no implica necesariamente mayor rentabilidad unitaria.**
 
-Incorporar validaciones automáticas de unicidad y consistencia sobre `booking_id` antes de ejecutar procesos de integración entre viajes y costos.
-
-Esto permitiría detectar relaciones muchos-a-muchos antes de que afecten reportes financieros o indicadores de rentabilidad.
-
----
-
-## 2. Fortalecer el modelo de datos con una llave transaccional confiable
-
-La principal limitación del análisis fue no contar con una llave secundaria que permitiera identificar de manera inequívoca cada viaje y su costo asociado.
-
-Se recomienda evaluar la creación de un identificador transaccional único que incorpore o relacione atributos como:
-
-- `booking_id`
-- fecha
-- cliente
-- viaje
-- registro de costos
-
-Esto permitiría recuperar registros actualmente excluidos y mejorar la trazabilidad entre fuentes.
+Este resultado sugiere que las decisiones operativas deberían considerar simultáneamente escala y eficiencia por viaje.
 
 ---
 
-## 3. Evaluar desempeño de vehículos con métricas de volumen y rentabilidad
+## Evolución mensual del margen operativo
 
-Evitar decisiones basadas exclusivamente en margen total.
+El margen mensual se mantuvo relativamente estable durante 2024.
 
-Auto lidera por contribución total, mientras que Go Sedan presenta mayor margen promedio por viaje.
+| Mes | Viajes | Margen total | Variación vs. mes anterior |
+|---|---:|---:|---:|
+| Enero | 12.664 | 1.049.554 | — |
+| Febrero | 11.708 | 966.361 | **-7,93%** |
+| Marzo | 12.510 | **1.087.588** | **+12,54%** |
+| Abril | 12.000 | 1.011.222 | -7,02% |
+| Mayo | 12.569 | 1.025.413 | +1,40% |
+| Junio | 12.235 | 1.027.772 | +0,23% |
+| Julio | 12.704 | 1.039.216 | +1,11% |
+| Agosto | 12.431 | 1.009.693 | -2,84% |
+| Septiembre | 12.051 | 994.577 | -1,50% |
+| Octubre | 12.424 | 1.048.104 | +5,38% |
+| Noviembre | 12.200 | 1.032.820 | -1,46% |
+| Diciembre | 12.047 | 1.026.966 | -0,57% |
 
-Se recomienda utilizar conjuntamente:
+### Window Function: `LAG()`
 
-- cantidad de viajes,
-- ingresos,
-- margen total,
-- margen promedio por viaje.
+Para comparar cada periodo con el inmediatamente anterior se utilizó:
 
-Esto permitiría diferenciar categorías que generan valor por escala de aquellas que presentan mayor eficiencia unitaria.
+    LAG(margen_total) OVER (ORDER BY mes)
 
----
+### Insight
 
-## 4. Investigar las causas de los viajes `Incomplete`
+Marzo presentó:
 
-Dado que los viajes `Incomplete` generan ingresos y presentan un margen promedio similar a los viajes completados, conviene profundizar en sus causas.
+- el **mayor margen operativo del año: 1.087.588**
+- la **mayor variación positiva mensual: +12,54%**
 
-Se recomienda analizar variables como:
+Febrero registró la mayor caída, con **-7,93%** respecto a enero.
 
-- motivo de interrupción,
-- tipo de vehículo,
-- horario,
-- ubicación,
-- distancia recorrida.
+A partir de mayo, la mayoría de las variaciones se mantuvo dentro de un rango relativamente acotado, excepto octubre con un crecimiento de **5,38%**.
 
-El objetivo sería identificar patrones que permitan reducir interrupciones o recuperar operaciones potencialmente completables.
+> El comportamiento anual fue relativamente estable y no muestra evidencia de una estacionalidad pronunciada.
 
----
+📄 [Ver análisis operativo completo](sql/03_operational_analysis.sql)
 
-## 5. Revisar campañas con ROMI negativo antes de mantener su inversión
-
-Campañas como:
-
-- `LANZAMIENTO_CDMX_2024_T3`
-- `AHORROS_PESOS_MX_191`
-- `IMPULSO_ECONOMIA_2024_18`
-- `PRIMER_VIAJE_GRATIS_2024`
-
-presentan retorno negativo.
-
-Antes de mantener o aumentar su presupuesto se recomienda revisar:
-
-- segmentación,
-- costo de adquisición,
-- incentivo promocional,
-- contribución generada,
-- objetivo estratégico de la campaña.
-
-Una campaña con ROMI negativo no necesariamente debe eliminarse inmediatamente, pero sí requiere justificar si existe un objetivo adicional —como adquisición o penetración— que compense su bajo retorno financiero.
+📎 [Ver resultados agregados en Google Sheets](TU_LINK_DE_GOOGLE_SHEETS)
 
 ---
 
-## 6. Evaluar escalamiento controlado de campañas con alto ROMI
+# 📣 4. Análisis de campañas de marketing
 
-`DESCUENTO_UNIVERSITARIO_55` presentó un ROMI de **828,75%**.
+El análisis de campañas buscó determinar si aquellas con mayor volumen o ingresos eran también las que generaban mayor retorno.
 
-En lugar de aumentar inmediatamente el presupuesto, se recomienda realizar un escalamiento progresivo y monitorear si el retorno se mantiene a medida que aumenta la inversión.
+Para evitar duplicar el costo de una campaña por cada viaje asociado, primero se agregaron los resultados por `campana_id` y posteriormente se realizó la unión con la tabla de campañas.
 
-Esto permitiría evitar asumir que un ROMI elevado permanecerá constante a mayor escala.
+## Métricas utilizadas
+
+### Margen operativo
+
+    Ingresos - Costos operativos
+
+### Contribución de campaña
+
+    Margen operativo - Costo de campaña
+
+### ROMI
+
+    Contribución de campaña / Costo de campaña × 100
 
 ---
 
-## 7. Mantener seguimiento temporal antes de concluir estacionalidad
+## Campañas con mayor ROMI
 
-Aunque marzo presentó el mayor margen y la mayor variación positiva mensual, un solo año de información no es suficiente para confirmar un patrón estacional.
+| Campaña | ROMI |
+|---|---:|
+| `DESCUENTO_UNIVERSITARIO_55` | **828,75%** |
+| `PROMO_ESCUDO_CLIMA_67` | 688,15% |
+| `ESPECIAL_CARNAVAL_021` | 650,99% |
+| `PAQUETE_BIENVENIDA_105` | 625,89% |
+| `CELEBRACION_CUMPLEAÑOS_126` | 576,24% |
 
-Se recomienda incorporar años adicionales y comparar:
+## Campañas con menor ROMI
 
-- variación mensual,
-- comportamiento interanual,
-- crecimiento YoY,
-- estacionalidad por tipo de vehículo o campaña.
+| Campaña | ROMI |
+|---|---:|
+| `LANZAMIENTO_CDMX_2024_T3` | **-69,70%** |
+| `AHORROS_PESOS_MX_191` | -53,75% |
+| `IMPULSO_ECONOMIA_2024_18` | -40,47% |
+| `PRIMER_VIAJE_GRATIS_2024` | -36,49% |
+| `MAGIA_NAVIDAD_2024` | -24,99% |
 
-Esto permitiría diferenciar fluctuaciones puntuales de patrones recurrentes.
+### Insight
 
-# ⚠️ Limitaciones
+`DESCUENTO_UNIVERSITARIO_55` presenta el mayor retorno de marketing debido a una contribución elevada en relación con su costo de campaña.
+
+En contraste, algunas campañas con volumen e ingresos relevantes presentan ROMI negativo porque la inversión realizada supera la contribución generada después de costos operativos.
+
+> **Mayor volumen o mayores ingresos no implican necesariamente mayor eficiencia de marketing.**
+
+📄 [Ver análisis completo de campañas](sql/04_campaign_analysis.sql)
+
+📎 [Ver resultados y KPIs de campañas en Google Sheets](TU_LINK_DE_GOOGLE_SHEETS)
+
+---
+
+# 💡 5. Principales insights accionables
+
+## 1. Implementar controles de calidad sobre claves de unión
+
+La inconsistencia en `booking_id` provocaba una sobreestimación del margen operativo de **5,1%**.
+
+**Acción sugerida:** incorporar controles de unicidad y validación de claves antes de integrar información proveniente de distintas fuentes.
+
+---
+
+## 2. Evaluar rentabilidad considerando escala y eficiencia
+
+Auto genera la mayor contribución total debido a su volumen, mientras que Go Sedan presenta el mayor margen promedio por viaje.
+
+**Acción sugerida:** utilizar simultáneamente indicadores de volumen, margen total y margen unitario antes de tomar decisiones sobre capacidad o mix de vehículos.
+
+---
+
+## 3. Investigar los viajes `Incomplete`
+
+Los viajes `Incomplete` presentan ingresos y margen promedio similares a los viajes completados.
+
+**Acción sugerida:** analizar las causas de interrupción para determinar si existen oportunidades de recuperación operacional o reducción de incidencias.
+
+---
+
+## 4. Revisar campañas con ROMI negativo
+
+Campañas como `LANZAMIENTO_CDMX_2024_T3`, `AHORROS_PESOS_MX_191` y `PRIMER_VIAJE_GRATIS_2024` presentan retorno negativo.
+
+**Acción sugerida:** revisar segmentación, costo de adquisición, incentivos y estrategia antes de mantener o incrementar inversión.
+
+---
+
+## 5. Evaluar escalamiento de campañas eficientes
+
+`DESCUENTO_UNIVERSITARIO_55` alcanza un ROMI de **828,75%**.
+
+**Acción sugerida:** evaluar si la eficiencia se mantiene al aumentar progresivamente la inversión antes de escalar el presupuesto.
+
+---
+
+## 6. Monitorear variaciones mensuales sin asumir estacionalidad
+
+Marzo presentó un crecimiento de **12,54%** respecto a febrero, pero el comportamiento anual fue relativamente estable.
+
+**Acción sugerida:** continuar monitoreando periodos adicionales antes de atribuir las variaciones observadas a un patrón estacional estructural.
+
+---
+
+# ⚠️ 6. Limitaciones
 
 Los datos originales se encuentran disponibles únicamente dentro del entorno SQL del bootcamp y la plataforma no permite exportar los conjuntos completos.
 
@@ -496,3 +455,5 @@ Las consultas completas pueden revisarse directamente en la carpeta [`sql/`](sql
 Data Analyst | SQL · Python · Power BI · Tableau · Excel
 
 Este proyecto forma parte de mi portafolio de Data Analytics y busca demostrar cómo la **calidad de los datos, el diseño correcto de las relaciones y la interpretación de KPIs** pueden afectar directamente la confiabilidad de las conclusiones y las decisiones de negocio.
+
+
